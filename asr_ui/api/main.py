@@ -13,10 +13,23 @@ from ..core.audio_utils import wav_bytes_from_array, record_audio
 
 app = FastAPI(title="ASR API", description="Automatic Speech Recognition API")
 
-# CORS middleware
+# CORS middleware configuration for production and development
+CORS_ORIGINS_RAW = os.getenv(
+    "CORS_ORIGINS", 
+    "http://localhost:3000",
+    "https://asr-models.pepeshanty.store",
+    "https://asr-models-backend.pepeshanty.store"
+)
+
+# Split and strip whitespace to handle environment variable formatting
+CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS_RAW.split(",") if origin.strip()]
+
+# Log allowed origins for debugging (in production, this should be in logs)
+print(f"[CORS] Allowed origins: {CORS_ORIGINS}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -219,6 +232,8 @@ async def transcribe_record(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
+
+
 
 
 if __name__ == "__main__":
