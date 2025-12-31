@@ -1,33 +1,59 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import uvicorn
 import os
 from dotenv import load_dotenv
+import logging
 
-# Load environment variables from .env file
+# Load environment variables from .env file (if present)
 load_dotenv()
 
 from ..models import get_model, MODEL_REGISTRY
 from ..core.audio_utils import wav_bytes_from_array, record_audio
-import logging
 
+# -----------------------------------------------------------------------------
+# App
+# -----------------------------------------------------------------------------
 app = FastAPI(title="ASR API", description="Automatic Speech Recognition API")
 
-# CORS middleware configuration for production and development
-CORS_ORIGINS_RAW = os.getenv(
-    "CORS_ORIGINS", 
+# -----------------------------------------------------------------------------
+# Logging
+# -----------------------------------------------------------------------------
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("asr_api")
+
+# -----------------------------------------------------------------------------
+# CORS
+# -----------------------------------------------------------------------------
+# Put this in Coolify env (recommended):
+# CORS_ORIGINS=https://asr-models.pepeshanty.store,https://asr-models-backend.pepeshanty.store,http://localhost:3000
+#
+# Or allow all (only if you understand the risk):
+# CORS_ORIGINS=*
+CORS_ORIGINS_RAW = os.getenv("CORS_ORIGINS", "")
+
+DEFAULT_CORS_ORIGINS = [
     "http://localhost:3000",
     "https://asr-models.pepeshanty.store",
-    "https://asr-models-backend.pepeshanty.store"
-)
+    "https://asr-models-backend.pepeshanty.store",
+]
 
-# Split and strip whitespace to handle environment variable formatting
-CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS_RAW.split(",") if origin.strip()]
+def parse_cors_origins(raw: str) -> List[str]:
+    raw = (raw or "").strip()
+    if raw == "" or raw.lower() in {"none", "null"}:
+        # fallback to defaults if not set
+        return DEFAULT_CORS_ORIGINS
+    if raw == "*":
+        return ["*"]
+    # comma-separated list
+    return [o.strip() for o in raw.split(",") if o.strip()]
 
-# Log allowed origins for debugging (in production, this should be in logs)
-print(f"[CORS] Allowed origins: {CORS_ORIGINS}")
+CORS_ORIGINS = parse_cors_origins(CORS_ORIGINS_RAW)
+logger.info(f"[CORS] Allowed origins: {CORS_ORIGINS}")
 
+# NOTE: If you use allow_credentials=True, using ["*"] is not recommended.
+# In production, set explicit origins via CORS_ORIGINS env var.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
@@ -36,12 +62,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Default model (can be configured via environment variable)
+# -----------------------------------------------------------------------------
+# Model selection and cache
+# -----------------------------------------------------------------------------
 DEFAULT_MODEL = os.getenv("ASR_DEFAULT_MODEL", "whisper_jax")
-
-# Model cache
 model_cache: Dict[str, Any] = {}
-
 
 def get_model_for_request(model_name: str):
     """Get or create a model instance for the given model name."""
@@ -57,51 +82,60 @@ def get_model_for_request(model_name: str):
             api_key = os.getenv("OMNILINGUAL_API_KEY", "")
             model = get_model(model_name, endpoint=endpoint, api_key=api_key)
         else:
-            # For any other model, try to get it without additional arguments
             model = get_model(model_name)
 
         model_cache[model_name] = model
         return model
     except Exception as e:
-        print(f"Failed to load model {model_name}: {e}")
+        logger.exception(f"Failed to load model {model_name}: {e}")
         raise
 
-
+# -----------------------------------------------------------------------------
+# Routes
+# -----------------------------------------------------------------------------
 @app.get("/")
 async def root():
     return {"message": "ASR API is running", "default_model": DEFAULT_MODEL}
 
-
 @app.get("/health")
 async def health():
-    """Health check using the default model."""
+    """
+    Light health check.
+    IMPORTANT: Don't force loading external models here, otherwise healthcheck can fail
+    if the upstream endpoint is temporarily down.
+    """
+    return {"status": "ok"}
+
+@app.get("/health/model")
+async def health_model():
+    """
+    Optional deeper health check that verifies default model is reachable.
+    You can keep Coolify healthcheck on /health (recommended).
+    """
     try:
         model = get_model_for_request(DEFAULT_MODEL)
-        # Try to get model info to verify it's working
         model.get_model_info()
         return {"status": "healthy", "model": DEFAULT_MODEL}
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Model {DEFAULT_MODEL} not loaded: {str(e)}")
 
-
 @app.get("/models")
 async def list_models():
     """List all available models and their information."""
     models_info = {}
-    
+
     for model_name in MODEL_REGISTRY.keys():
         try:
             model = get_model_for_request(model_name)
             models_info[model_name] = model.get_model_info()
         except Exception as e:
             models_info[model_name] = {"error": str(e), "status": "failed_to_load"}
-    
+
     return {
         "available_models": list(MODEL_REGISTRY.keys()),
         "default_model": DEFAULT_MODEL,
-        "models_info": models_info
+        "models_info": models_info,
     }
-
 
 @app.post("/transcribe/upload")
 async def transcribe_upload(
@@ -116,26 +150,21 @@ async def transcribe_upload(
     stride_trailing: Optional[float] = Form(None),
     prompt: Optional[str] = Form(None),
 ):
-    """
-    Transcribe an uploaded audio file.
-    """
+    """Transcribe an uploaded audio file."""
     try:
         asr_model = get_model_for_request(model)
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"ASR model '{model}' not available: {str(e)}")
-    
-    # Read the uploaded file
+
     contents = await file.read()
-    
-    print(f"[DEBUG] Received upload: filename={file.filename}, size={len(contents)} bytes, mime_type={file.content_type}")
-    
+
+    logger.info(
+        f"[UPLOAD] filename={file.filename}, size={len(contents)} bytes, mime_type={file.content_type}"
+    )
+
     if len(contents) == 0:
         raise HTTPException(status_code=400, detail="Uploaded file is empty")
-    
-    # Determine mime type
-    mime_type = file.content_type or "audio/wav"
-    
-    # Prepare additional parameters
+
     extra_params = {}
     if num_beams is not None:
         extra_params["num_beams"] = num_beams
@@ -149,14 +178,13 @@ async def transcribe_upload(
         extra_params["stride_trailing"] = stride_trailing
     if prompt is not None:
         extra_params["prompt"] = prompt
-    
+
     try:
-        # Transcribe
         text = asr_model.transcribe(
             audio_bytes=contents,
             task=task,
             language=language,
-            **extra_params
+            **extra_params,
         )
         return {
             "text": text,
@@ -164,11 +192,11 @@ async def transcribe_upload(
             "language": language,
             "model": model,
             "file_name": file.filename,
-            "file_size": len(contents)
+            "file_size": len(contents),
         }
     except Exception as e:
+        logger.exception(f"Transcription failed: {e}")
         raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
-
 
 @app.post("/transcribe/record")
 async def transcribe_record(
@@ -185,22 +213,22 @@ async def transcribe_record(
     stride_trailing: Optional[float] = Form(None),
     prompt: Optional[str] = Form(None),
 ):
-    """
-    Record audio from microphone and transcribe.
-    """
+    """Record audio from microphone and transcribe."""
     try:
         asr_model = get_model_for_request(model)
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"ASR model '{model}' not available: {str(e)}")
-    
-    # Record audio
+
+    # IMPORTANT: recording from microphone inside a server/container usually doesn't work
+    # unless the container has audio devices passed through. You already handled errors
+    # in record_audio; we keep try/except anyway.
     try:
         audio_array = record_audio(seconds, sample_rate, device)
         audio_bytes = wav_bytes_from_array(audio_array, sample_rate)
     except Exception as e:
+        logger.exception(f"Recording failed: {e}")
         raise HTTPException(status_code=500, detail=f"Recording failed: {str(e)}")
-    
-    # Prepare additional parameters
+
     extra_params = {}
     if num_beams is not None:
         extra_params["num_beams"] = num_beams
@@ -214,14 +242,13 @@ async def transcribe_record(
         extra_params["stride_trailing"] = stride_trailing
     if prompt is not None:
         extra_params["prompt"] = prompt
-    
+
     try:
-        # Transcribe
         text = asr_model.transcribe(
             audio_bytes=audio_bytes,
             task=task,
             language=language,
-            **extra_params
+            **extra_params,
         )
         return {
             "text": text,
@@ -229,13 +256,14 @@ async def transcribe_record(
             "language": language,
             "model": model,
             "recorded_seconds": seconds,
-            "sample_rate": sample_rate
+            "sample_rate": sample_rate,
         }
     except Exception as e:
+        logger.exception(f"Transcription failed: {e}")
         raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
 
-
-
-
+# -----------------------------------------------------------------------------
+# Local run
+# -----------------------------------------------------------------------------
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "8000")))
