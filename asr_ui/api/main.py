@@ -37,6 +37,7 @@ DEFAULT_CORS_ORIGINS = [
     "http://localhost:3000",
     "https://asr-models.pepeshanty.store",
     "https://asr-models-backend.pepeshanty.store",
+    "https://asr-model-backend.pepeshanty.store",
 ]
 
 def parse_cors_origins(raw: str) -> List[str]:
