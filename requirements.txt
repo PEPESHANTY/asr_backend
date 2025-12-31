@@ -12,3 +12,7 @@ webrtcvad
 streamlit
 python-dotenv
 openai>=1.40.0
+python-multipart
+httpx
+pydantic
+typing
