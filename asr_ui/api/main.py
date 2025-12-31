@@ -10,6 +10,7 @@ load_dotenv()
 
 from ..models import get_model, MODEL_REGISTRY
 from ..core.audio_utils import wav_bytes_from_array, record_audio
+import logging
 
 app = FastAPI(title="ASR API", description="Automatic Speech Recognition API")
 
