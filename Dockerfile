@@ -15,7 +15,10 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 COPY requirements.txt .
 RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir --retries 10 --timeout 120 \
+      --index-url https://download.pytorch.org/whl/cpu \
+      torch torchaudio && \
+    pip install --no-cache-dir --retries 10 --timeout 120 -r requirements.txt
 
 # --- STAGE 2: The Final Production Image ---
 FROM python:3.11-slim
