@@ -6,6 +6,7 @@ from .omni_lingual import OmniLingualAPIModel
 MODEL_REGISTRY = {
     "whisper_jax": WhisperJAXModel,
     "omni_lingual": OmniLingualAPIModel,
+    "chunkformer": ChunkformerModel,
 }
 
 def get_model(model_name: str, **kwargs) -> ASRModel:
