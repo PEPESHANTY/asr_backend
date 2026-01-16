@@ -1,7 +1,7 @@
 from .base import ASRModel
 from .whisper_jax import WhisperJAXModel
 from .omni_lingual import OmniLingualAPIModel
-
+from .chunkformer import ChunkformerModel
 # Model registry
 MODEL_REGISTRY = {
     "whisper_jax": WhisperJAXModel,
@@ -30,4 +30,4 @@ def get_model(model_name: str, **kwargs) -> ASRModel:
     model_class = MODEL_REGISTRY[model_name]
     return model_class(**kwargs)
 
-__all__ = ["ASRModel", "WhisperJAXModel", "OmniLingualAPIModel", "get_model", "MODEL_REGISTRY"]
+__all__ = ["ASRModel", "WhisperJAXModel", "OmniLingualAPIModel", "ChunkformerModel", "get_model", "MODEL_REGISTRY"]
