@@ -16,7 +16,7 @@ class ChunkformerModel(ASRModel):
             endpoint: API endpoint URL (default from environment)
             api_key: API key (default from environment)
         """
-        self.endpoint = endpoint or os.getenv("CHUNKFORMER_ENDPOINT", "http://127.0.0.1:8004/asr")
+        self.endpoint = endpoint or os.getenv("CHUNKFORMER_ENDPOINT", "http://hanoi2.ucd.ie/asr_chunkformer")
         self.api_key = api_key or os.getenv("CHUNKFORMER_API_KEY", "AIRRVie_api_key")
         
     def transcribe(
