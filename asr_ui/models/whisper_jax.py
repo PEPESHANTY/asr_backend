@@ -2,6 +2,7 @@ import requests
 import io
 from typing import Optional, Dict, Any
 from .base import ASRModel
+from ..core.audio_utils import convert_to_wav_bytes
 
 
 class WhisperJAXModel(ASRModel):
@@ -24,6 +25,12 @@ class WhisperJAXModel(ASRModel):
         Additional kwargs can include:
             num_beams, temperature, chunk_sec, stride_leading, stride_trailing, prompt
         """
+        # Convert audio to WAV format to ensure compatibility
+        try:
+            wav_bytes = convert_to_wav_bytes(audio_bytes)
+        except Exception as e:
+            raise Exception(f"Audio format conversion failed: {str(e)}")
+        
         form_data = {
             "task": task,
             "return_timestamps": "false"
@@ -39,7 +46,7 @@ class WhisperJAXModel(ASRModel):
             if param in kwargs and kwargs[param] is not None:
                 form_data[param] = str(kwargs[param])
         
-        files = {"file": ("audio.wav", io.BytesIO(audio_bytes), "audio/wav")}
+        files = {"file": ("audio.wav", io.BytesIO(wav_bytes), "audio/wav")}
         
         try:
             response = requests.post(self.endpoint, files=files, data=form_data, timeout=None)

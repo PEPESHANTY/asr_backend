@@ -3,6 +3,7 @@ import requests
 import io
 from typing import Optional, Dict, Any, List
 from .base import ASRModel
+from ..core.audio_utils import convert_to_wav_bytes
 
 
 class OmniLingualAPIModel(ASRModel):
@@ -64,6 +65,12 @@ class OmniLingualAPIModel(ASRModel):
         if task != "transcribe":
             raise ValueError("OmniLingual API only supports transcription, not translation")
         
+        # Convert audio to WAV format to ensure compatibility
+        try:
+            wav_bytes = convert_to_wav_bytes(audio_bytes)
+        except Exception as e:
+            raise Exception(f"Audio format conversion failed: {str(e)}")
+        
         # Prepare the request headers and data as per the curl example
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -75,7 +82,7 @@ class OmniLingualAPIModel(ASRModel):
         # We'll use the same field names and filename
         # Ensure the BytesIO is at position 0
         import time
-        audio_stream = io.BytesIO(audio_bytes)
+        audio_stream = io.BytesIO(wav_bytes)
         audio_stream.seek(0)
         
         # Use unique filename to avoid caching issues
@@ -94,15 +101,16 @@ class OmniLingualAPIModel(ASRModel):
         
         # Compute hash of audio bytes to verify uniqueness
         import hashlib
-        audio_hash = hashlib.md5(audio_bytes).hexdigest()[:8]
+        audio_hash = hashlib.md5(wav_bytes).hexdigest()[:8]
         
         print(f"[DEBUG] Calling OmniLingual API: {self.endpoint}")
         print(f"[DEBUG] Language: {data.get('lang_code')}")
-        print(f"[DEBUG] Audio size: {len(audio_bytes)} bytes")
+        print(f"[DEBUG] Original audio size: {len(audio_bytes)} bytes")
+        print(f"[DEBUG] WAV audio size: {len(wav_bytes)} bytes")
         print(f"[DEBUG] Audio hash: {audio_hash}")
         print(f"[DEBUG] API Key present: {'Yes' if self.api_key else 'No'}")
         print(f"[DEBUG] Using filename: {filename}")
-        print(f"[DEBUG] First 100 bytes: {audio_bytes[:100].hex()}")
+        print(f"[DEBUG] First 100 bytes: {wav_bytes[:100].hex()}")
         
         try:
             # Make the request

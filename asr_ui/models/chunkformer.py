@@ -3,6 +3,7 @@ import requests
 import io
 from typing import Optional, Dict, Any, List
 from .base import ASRModel
+from ..core.audio_utils import convert_to_wav_bytes
 
 
 class ChunkformerModel(ASRModel):
@@ -41,11 +42,17 @@ class ChunkformerModel(ASRModel):
         if task != "transcribe":
             raise ValueError("Chunkformer API only supports transcription, not translation")
         
+        # Convert audio to WAV format to ensure compatibility
+        try:
+            wav_bytes = convert_to_wav_bytes(audio_bytes)
+        except Exception as e:
+            raise Exception(f"Audio format conversion failed: {str(e)}")
+        
         headers = {
             "Authorization": f"Bearer {self.api_key}",
         }
         
-        audio_stream = io.BytesIO(audio_bytes)
+        audio_stream = io.BytesIO(wav_bytes)
         audio_stream.seek(0)
         
         import time
@@ -61,7 +68,8 @@ class ChunkformerModel(ASRModel):
         }
         
         print(f"[DEBUG] Calling Chunkformer API: {self.endpoint}")
-        print(f"[DEBUG] Audio size: {len(audio_bytes)} bytes")
+        print(f"[DEBUG] Original audio size: {len(audio_bytes)} bytes")
+        print(f"[DEBUG] WAV audio size: {len(wav_bytes)} bytes")
         print(f"[DEBUG] API Key: {self.api_key[:10]}..." if self.api_key else "No API key")
         
         try:
