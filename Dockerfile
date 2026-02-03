@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     portaudio19-dev libasound2-dev libsndfile1-dev \
     && rm -rf /var/lib/apt/lists/*
 
-RUN python -m ven
+RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 COPY requirements.txt .
@@ -23,7 +23,8 @@ FROM python:3.11-slim
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \   libportaudio2 \
+    curl \
+    libportaudio2 \
     libasound2 \
     libsndfile1 \
     && rm -rf /var/lib/apt/lists/*
