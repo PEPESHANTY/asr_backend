@@ -1,0 +1,151 @@
+import os
+import requests
+import io
+from typing import Optional, Dict, Any, List
+from .base import ASRModel
+from ..core.audio_utils import convert_to_wav_bytes
+
+
+class Qwen3Model(ASRModel):
+    """Qwen3 ASR model using external API."""
+    
+    def __init__(self, endpoint: str = None, api_key: str = None):
+        """
+        Initialize the Qwen3 API model.
+        
+        Args:
+            endpoint: API endpoint URL (default from environment)
+            api_key: API key (default from environment)
+        """
+        self.endpoint = endpoint or os.getenv("QWEN3_ENDPOINT", "http://localhost:8005/asr")
+        self.api_key = api_key or os.getenv("QWEN3_API_KEY", "AIRRVie_api_key")
+        self.supported_languages = self._load_supported_languages()
+        
+    def _load_supported_languages(self) -> List[str]:
+        """Load supported languages for Qwen3 model."""
+        common_languages = [
+            "eng_Latn",
+            "vie_Latn",
+            "fra_Latn",
+            "spa_Latn",
+            "deu_Latn",
+            "ita_Latn",
+            "por_Latn",
+            "rus_Cyrl",
+            "jpn_Jpan",
+            "kor_Hang",
+            "cmn_Hans",
+            "cmn_Hant",
+            "ara_Arab",
+            "hin_Deva",
+        ]
+        return common_languages
+    
+    def transcribe(
+        self,
+        audio_bytes: bytes,
+        task: str = "transcribe",
+        language: Optional[str] = None,
+        **kwargs
+    ) -> str:
+        """
+        Transcribe audio bytes to text using Qwen3 API.
+        
+        Args:
+            audio_bytes: Audio data in bytes
+            task: Only "transcribe" is supported
+            language: Language code in format {language_code}_{script} (e.g., "vie_Latn")
+            **kwargs: Additional parameters (ignored for API)
+            
+        Returns:
+            Transcribed text
+        """
+        if task != "transcribe":
+            raise ValueError("Qwen3 API only supports transcription, not translation")
+        
+        try:
+            wav_bytes = convert_to_wav_bytes(audio_bytes)
+        except Exception as e:
+            raise Exception(f"Audio format conversion failed: {str(e)}")
+        
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+        }
+        
+        import time
+        audio_stream = io.BytesIO(wav_bytes)
+        audio_stream.seek(0)
+        
+        timestamp = int(time.time() * 1000)
+        filename = f"audio_{timestamp}.wav"
+        
+        files = {
+            "audio": (filename, audio_stream, "audio/wav")
+        }
+        
+        data = {}
+        if language:
+            data["lang_code"] = language
+        else:
+            data["lang_code"] = "eng_Latn"
+        
+        import hashlib
+        audio_hash = hashlib.md5(wav_bytes).hexdigest()[:8]
+        
+        print(f"[DEBUG] Calling Qwen3 API: {self.endpoint}")
+        print(f"[DEBUG] Language: {data.get('lang_code')}")
+        print(f"[DEBUG] Original audio size: {len(audio_bytes)} bytes")
+        print(f"[DEBUG] WAV audio size: {len(wav_bytes)} bytes")
+        print(f"[DEBUG] Audio hash: {audio_hash}")
+        print(f"[DEBUG] API Key present: {'Yes' if self.api_key else 'No'}")
+        print(f"[DEBUG] Using filename: {filename}")
+        
+        try:
+            response = requests.post(
+                self.endpoint,
+                headers=headers,
+                files=files,
+                data=data,
+                timeout=120
+            )
+            
+            print(f"[DEBUG] Response status: {response.status_code}")
+            print(f"[DEBUG] Response headers: {response.headers}")
+            
+            if response.status_code != 200:
+                print(f"[DEBUG] Response error: {response.text}")
+                raise Exception(f"API request failed with status {response.status_code}: {response.text}")
+            
+            result = response.json()
+            print(f"[DEBUG] Response JSON: {result}")
+            
+            if 'text' in result:
+                text = result['text'].strip()
+                print(f"[DEBUG] Extracted text: {text}")
+                return text
+            else:
+                print(f"[DEBUG] No 'text' field in response. Available keys: {result.keys()}")
+                for key, value in result.items():
+                    if isinstance(value, str) and len(value) > 0:
+                        print(f"[DEBUG] Using alternative field '{key}': {value}")
+                        return value.strip()
+                raise Exception(f"No text field found in response: {result}")
+            
+        except Exception as e:
+            print(f"[DEBUG] Exception in transcribe: {e}")
+            raise Exception(f"Transcription failed: {e}")
+    
+    def get_available_languages(self) -> list:
+        """Get list of supported language codes."""
+        return self.supported_languages
+    
+    def get_model_info(self) -> Dict[str, Any]:
+        """Get model information."""
+        return {
+            "name": "Qwen3 ASR",
+            "endpoint": self.endpoint,
+            "supported_languages_count": len(self.supported_languages),
+            "supported_languages": self.supported_languages[:10],
+            "task": "transcribe",
+            "provider": "Qwen3 API"
+        }

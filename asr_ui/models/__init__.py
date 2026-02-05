@@ -2,11 +2,15 @@ from .base import ASRModel
 from .whisper_jax import WhisperJAXModel
 from .omni_lingual import OmniLingualAPIModel
 from .chunkformer import ChunkformerModel
+from .qwen3 import Qwen3Model
 # Model registry
 MODEL_REGISTRY = {
     "whisper_jax": WhisperJAXModel,
     "omni_lingual": OmniLingualAPIModel,
     "chunkformer": ChunkformerModel,
+    "qwen3": Qwen3Model,
+    "qwen3_1_7B": Qwen3Model,
+    "qwen3_0_6B": Qwen3Model,
 }
 
 def get_model(model_name: str, **kwargs) -> ASRModel:

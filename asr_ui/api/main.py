@@ -86,6 +86,18 @@ def get_model_for_request(model_name: str):
             endpoint = os.getenv("CHUNKFORMER_ENDPOINT", "http://hanoi2.ucd.ie/asr_chunkformer")
             api_key = os.getenv("CHUNKFORMER_API_KEY", "")
             model = get_model(model_name, endpoint=endpoint, api_key=api_key)
+        elif model_name == "qwen3":
+            endpoint = os.getenv("QWEN3_ENDPOINT", "http://localhost:8005/asr")
+            api_key = os.getenv("QWEN3_API_KEY", "AIRRVie_api_key")
+            model = get_model(model_name, endpoint=endpoint, api_key=api_key)
+        elif model_name == "qwen3_1_7B":
+            endpoint = os.getenv("QWEN3_1_7B_ENDPOINT", "http://hanoi2.ucd.ie/asr_q3_1_7B")
+            api_key = os.getenv("QWEN3_1_7B_API_KEY", "AIRRVie_api_key")
+            model = get_model(model_name, endpoint=endpoint, api_key=api_key)
+        elif model_name == "qwen3_0_6B":
+            endpoint = os.getenv("QWEN3_0_6B_ENDPOINT", "http://hanoi2.ucd.ie/asr_q3_0_6B")
+            api_key = os.getenv("QWEN3_0_6B_API_KEY", "AIRRVie_api_key")
+            model = get_model(model_name, endpoint=endpoint, api_key=api_key)
         else:
             model = get_model(model_name)
 
