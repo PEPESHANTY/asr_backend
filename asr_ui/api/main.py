@@ -76,7 +76,7 @@ def get_model_for_request(model_name: str):
 
     try:
         if model_name == "whisper_jax":
-            endpoint = os.getenv("WHISPER_ENDPOINT", "http://127.0.0.1:8008/transcribe")
+            endpoint = os.getenv("WHISPER_ENDPOINT", "http://35.186.40.29:8008/transcribe")
             model = get_model(model_name, endpoint=endpoint)
         elif model_name == "omni_lingual":
             endpoint = os.getenv("OMNILINGUAL_ENDPOINT", "http://hanoi2.ucd.ie/asr_omnilingual")
@@ -85,10 +85,6 @@ def get_model_for_request(model_name: str):
         elif model_name == "chunkformer":
             endpoint = os.getenv("CHUNKFORMER_ENDPOINT", "http://hanoi2.ucd.ie/asr_chunkformer")
             api_key = os.getenv("CHUNKFORMER_API_KEY", "")
-            model = get_model(model_name, endpoint=endpoint, api_key=api_key)
-        elif model_name == "qwen3":
-            endpoint = os.getenv("QWEN3_ENDPOINT", "http://localhost:8005/asr")
-            api_key = os.getenv("QWEN3_API_KEY", "AIRRVie_api_key")
             model = get_model(model_name, endpoint=endpoint, api_key=api_key)
         elif model_name == "qwen3_1_7B":
             endpoint = os.getenv("QWEN3_1_7B_ENDPOINT", "http://hanoi2.ucd.ie/asr_q3_1_7B")

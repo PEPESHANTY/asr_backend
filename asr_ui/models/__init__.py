@@ -8,7 +8,6 @@ MODEL_REGISTRY = {
     "whisper_jax": WhisperJAXModel,
     "omni_lingual": OmniLingualAPIModel,
     "chunkformer": ChunkformerModel,
-    "qwen3": Qwen3Model,
     "qwen3_1_7B": Qwen3Model,
     "qwen3_0_6B": Qwen3Model,
 }
