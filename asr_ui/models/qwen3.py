@@ -1,6 +1,7 @@
 import os
 import requests
 import io
+import urllib.parse
 from typing import Optional, Dict, Any, List
 from .base import ASRModel
 from ..core.audio_utils import convert_to_wav_bytes
@@ -101,19 +102,67 @@ class Qwen3Model(ASRModel):
         print(f"[DEBUG] Using filename: {filename}")
         
         try:
-            response = requests.post(
-                self.endpoint,
-                headers=headers,
-                files=files,
-                data=data,
-                timeout=120
-            )
-            
-            print(f"[DEBUG] Response status: {response.status_code}")
-            print(f"[DEBUG] Response headers: {response.headers}")
-            
+            def _add_endpoint(candidates: list, url: str):
+                if not url:
+                    return
+                if url not in candidates:
+                    candidates.append(url)
+
+            candidates: list[str] = []
+            endpoint = (self.endpoint or "").strip()
+            _add_endpoint(candidates, endpoint)
+
+            base = endpoint.rstrip("/")
+            if base:
+                _add_endpoint(candidates, f"{base}/asr")
+                _add_endpoint(candidates, f"{base}/transcribe")
+                _add_endpoint(candidates, f"{base}/transcribe/upload")
+
+            if endpoint:
+                parsed = urllib.parse.urlparse(endpoint)
+                path = parsed.path or ""
+                if "/asr_q3_1_7B" in path:
+                    direct_base = urllib.parse.urlunparse(parsed._replace(netloc=f"{parsed.hostname}:8005", path="", params="", query="", fragment=""))
+                    direct_base = direct_base.rstrip("/")
+                    _add_endpoint(candidates, f"{direct_base}/asr")
+                    _add_endpoint(candidates, f"{direct_base}/transcribe")
+                if "/asr_q3_0_6B" in path:
+                    direct_base = urllib.parse.urlunparse(parsed._replace(netloc=f"{parsed.hostname}:8006", path="", params="", query="", fragment=""))
+                    direct_base = direct_base.rstrip("/")
+                    _add_endpoint(candidates, f"{direct_base}/asr")
+                    _add_endpoint(candidates, f"{direct_base}/transcribe")
+
+            response = None
+            last_error = None
+            for url in candidates:
+                print(f"[DEBUG] POST {url}")
+                response = requests.post(
+                    url,
+                    headers=headers,
+                    files=files,
+                    data=data,
+                    timeout=120,
+                )
+
+                print(f"[DEBUG] Response status: {response.status_code}")
+                print(f"[DEBUG] Response headers: {response.headers}")
+
+                if response.status_code == 200:
+                    break
+                if response.status_code in {404, 405}:
+                    last_error = response.text
+                    continue
+
+                print(f"[DEBUG] Response error: {response.text}")
+                raise Exception(f"API request failed with status {response.status_code}: {response.text}")
+
+            if response is None:
+                raise Exception("No endpoint configured")
+
             if response.status_code != 200:
                 print(f"[DEBUG] Response error: {response.text}")
+                if last_error is not None:
+                    raise Exception(f"API request failed with status {response.status_code}: {last_error}")
                 raise Exception(f"API request failed with status {response.status_code}: {response.text}")
             
             result = response.json()
