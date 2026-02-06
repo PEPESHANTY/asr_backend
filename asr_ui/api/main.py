@@ -1,6 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional, Dict, Any, List
+from starlette.concurrency import run_in_threadpool
 import uvicorn
 import os
 from dotenv import load_dotenv
@@ -193,7 +194,8 @@ async def transcribe_upload(
         extra_params["prompt"] = prompt
 
     try:
-        text = asr_model.transcribe(
+        text = await run_in_threadpool(
+            asr_model.transcribe,
             audio_bytes=contents,
             task=task,
             language=language,
@@ -257,7 +259,8 @@ async def transcribe_record(
         extra_params["prompt"] = prompt
 
     try:
-        text = asr_model.transcribe(
+        text = await run_in_threadpool(
+            asr_model.transcribe,
             audio_bytes=audio_bytes,
             task=task,
             language=language,
