@@ -128,9 +128,6 @@ class Qwen3Model(ASRModel):
                 return []
 
             candidates: list[str] = []
-            if normalized not in candidates:
-                candidates.append(normalized)
-
             name_map = {
                 "eng": "English",
                 "en": "English",
@@ -139,8 +136,14 @@ class Qwen3Model(ASRModel):
             }
 
             lower = normalized.lower()
-            if lower in name_map and name_map[lower] not in candidates:
-                candidates.append(name_map[lower])
+            # Prefer the name first because upstream commonly validates against a list
+            # like: 'Vietnamese', 'English', ... and rejects ISO codes.
+            if lower in name_map:
+                if name_map[lower] not in candidates:
+                    candidates.append(name_map[lower])
+
+            if normalized not in candidates:
+                candidates.append(normalized)
 
             # If user already passed a name like "Vietnamese", keep it as well.
             if normalized not in candidates:
@@ -221,9 +224,17 @@ class Qwen3Model(ASRModel):
 
                     if response.status_code == 200:
                         break
-                    if response.status_code in {400, 404, 405, 422}:
+                    retryable_statuses = {400, 404, 405, 422}
+                    if response.status_code in retryable_statuses:
                         last_error = response.text
                         continue
+
+                    # Some Qwen deployments return 500 for invalid/unsupported language.
+                    if response.status_code == 500:
+                        body_lower = (response.text or "").lower()
+                        if "unsupported language" in body_lower:
+                            last_error = response.text
+                            continue
 
                     print(f"[DEBUG] Response error: {response.text}")
                     raise Exception(
